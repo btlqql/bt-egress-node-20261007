@@ -36,7 +36,7 @@ jobs:
           python-version: "3.11"
       - name: relay
         env:
-          TAIYI_TOKEN: ${{ inputs.dry && '' || secrets.TAIYI_TOKEN }}
+          TAIYI_TOKEN: ${{ !inputs.dry && secrets.TAIYI_TOKEN || '' }}
           KEY: ${{ inputs.key }}
           MODE: ${{ inputs.mode }}
           COUNT: ${{ inputs.count }}

@@ -55,7 +55,7 @@ def attendnum(key):
 
 
 def alive():
-    d = api("/competition/searchAttend", {"userId": None, "viewDetail": True}, TOKEN)
+    d = api("/competition/searchAttend", {"viewDetail": True}, TOKEN)
     code = d.get("code") or (d.get("status") or {}).get("code")
     return code in (0, 200), d
 
@@ -85,6 +85,12 @@ def main():
         except Exception:                                   # noqa: BLE001
             print(f"   {svc.split('/')[2]}: {(p.stdout or 'no data')[:120]}")
 
+    c = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                        "--max-time", "20", "-A", UA, "-X", "POST",
+                        "-H", "content-type: application/json", "-d",
+                        '{"page":1,"pageSize":1}', BASE + "/competition/search"],
+                       capture_output=True, text=True)
+    print(f"   站点可达性 POST /competition/search -> HTTP {(c.stdout or '?').strip()}")
     if not TOKEN:
         print("TAIYI_TOKEN 未设置 → 只做只读基线，不写入。")
         print(f"   {key} attendNum = {attendnum(key)}")
