@@ -12,6 +12,10 @@ import subprocess
 import sys
 import time
 
+import functools
+
+print = functools.partial(print, flush=True)   # Actions 会吞掉未 flush 的尾部输出
+
 BASE = "https://www.taiyi.top/api"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -91,11 +95,16 @@ def main():
                         '{"page":1,"pageSize":1}', BASE + "/competition/search"],
                        capture_output=True, text=True)
     print(f"   站点可达性 POST /competition/search -> HTTP {(c.stdout or '?').strip()}")
+    print(f"   token 指纹: len={len(TOKEN)} head={TOKEN[:12]}…（只打前缀，不是密文）")
     if not TOKEN:
         print("TAIYI_TOKEN 未设置 → 只做只读基线，不写入。")
         print(f"   {key} attendNum = {attendnum(key)}")
         return
-    ok, probe = alive()
+    try:
+        ok, probe = alive()
+    except BaseException as exc:                       # noqa: BLE001
+        raise SystemExit(f"alive() 失败，零写入退出: {type(exc).__name__} {exc}")
+    print(f"   alive() -> {ok} status={probe.get('status')}")
     if not ok:
         raise SystemExit(f"token 无效/过期，零写入退出：{probe}")
 
