@@ -90,6 +90,10 @@ def human_pool(token, exclude_key):
        所以昵称不能当空号判据；学校+邮箱才是人味。uid<=30480 再剔掉 10% 薄号。
     """
     pool, seen = [], set()
+    try:                                # 目标比赛已有成员必须剔除，否则抽到就 already have 卡住批次
+        inside = {u.get("userId") for u in roster(exclude_key, token)}
+    except SystemExit:
+        inside = set()
     for page in (1, 2, 3):
         d = api("/competition/search", {"page": page, "pageSize": 50})
         for c in (d.get("data", {}) or {}).get("data", []) or []:
@@ -104,7 +108,7 @@ def human_pool(token, exclude_key):
                 uid = u.get("userId")
                 org = (u.get("organizationName") or "").strip()
                 mail = (u.get("email") or "").strip()
-                if not uid or uid in seen or uid > UID_MAX:
+                if not uid or uid in seen or uid > UID_MAX or uid in inside:
                     continue
                 if org.lower() in PLACE_ORG or "@" not in mail:
                     continue
