@@ -66,13 +66,15 @@ def alive():
     return code in (0, 200), d
 
 
-SHELL = re.compile(r"^\u592a\u4e59\u7528\u6237[0-9a-f]{5}$")   # 平台自动昵称 = 壳号
+SHELL = re.compile(r"^\u592a\u4e59\u7528\u6237[0-9a-f]{5}$")   # 平台默认昵称（不等于空号）
+PLACE_ORG = {"", "github", "gitee", "gitcode", "gitlink", "gitlink.cn"}  # OAuth 回填，不是学校
+UID_MAX = int(os.environ.get("UID_MAX", "30480"))   # 「不要太新」：9-02 注册序上限
 
 
 def roster(key, token):
-    """读某比赛的真实参赛名单（需 token）。签名来自 SPA bundle：
+    """读某比赛参赛名单（需 token）。签名来自 SPA bundle chunk-697d66dd：
        POST /evaluation/competition/searchAttendUser {competitionKey, pageReq:{pageNo,pageSize}}
-       -> data.data = [{userId, nickName, organizationName, email}]，条数 == attendNum。
+       -> data.data=[{userId,nickName,organizationName,email}]，条数 == attendNum。
     """
     d = api("/evaluation/competition/searchAttendUser",
             {"competitionKey": key, "pageReq": {"pageNo": 1, "pageSize": 1000}}, token)
@@ -83,9 +85,9 @@ def roster(key, token):
 
 
 def human_pool(token, exclude_key):
-    """真人池：跨比赛名单里「自定义昵称 + 填了学校/单位」的 userId。
-       10-09 实测 agentUniverse-00002 的 117 人里只有 79 人是自定义昵称，
-       38 个是太乙用户xxxxx 壳号；盲抽 randint(1,REAL_HI) 会同时命中壳号与空位。
+    """真人池 = 跨比赛名单里「学校非OAuth回填 + 有邮箱 + userId<=UID_MAX」的账号。
+       10-09 实测 8 比赛去重 418 人：默认昵称占 47% 但其中 100 人填了真学校，
+       所以昵称不能当空号判据；学校+邮箱才是人味。uid<=30480 再剔掉 10% 薄号。
     """
     pool, seen = [], set()
     for page in (1, 2, 3):
@@ -99,8 +101,12 @@ def human_pool(token, exclude_key):
             except SystemExit:
                 continue
             for u in rows:
-                uid, nick, org = u.get("userId"), u.get("nickName") or "", u.get("organizationName") or ""
-                if uid in seen or SHELL.match(nick) or not org.strip() or not nick.strip():
+                uid = u.get("userId")
+                org = (u.get("organizationName") or "").strip()
+                mail = (u.get("email") or "").strip()
+                if not uid or uid in seen or uid > UID_MAX:
+                    continue
+                if org.lower() in PLACE_ORG or "@" not in mail:
                     continue
                 seen.add(uid)
                 pool.append(uid)
