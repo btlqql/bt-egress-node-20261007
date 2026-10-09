@@ -8,6 +8,7 @@
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -21,7 +22,8 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 TOKEN = os.environ.get("TAIYI_TOKEN", "").strip()
 # 真实注册序区间（9-02 实测 ≈30480；用旧区间保证抽到的是有资料的真人）
-REAL_HI = int(os.environ.get("REAL_HI", "30480"))
+REAL_HI = int(os.environ.get("REAL_HI", "34565"))   # 10-09 名单实测 uid 已达 34565，9-02 的 30480 过时
+TODAY = time.strftime("%Y-%m-%d")
 
 
 def api(path, data=None, token=None, method="POST", tries=4):
@@ -64,7 +66,55 @@ def alive():
     return code in (0, 200), d
 
 
-def pick_uid(mode, used):
+SHELL = re.compile(r"^\u592a\u4e59\u7528\u6237[0-9a-f]{5}$")   # 平台自动昵称 = 壳号
+
+
+def roster(key, token):
+    """读某比赛的真实参赛名单（需 token）。签名来自 SPA bundle：
+       POST /evaluation/competition/searchAttendUser {competitionKey, pageReq:{pageNo,pageSize}}
+       -> data.data = [{userId, nickName, organizationName, email}]，条数 == attendNum。
+    """
+    d = api("/evaluation/competition/searchAttendUser",
+            {"competitionKey": key, "pageReq": {"pageNo": 1, "pageSize": 1000}}, token)
+    rows = (d.get("data") or {}).get("data") or []
+    if not rows:
+        raise SystemExit(f"名单读取失败 {key}: {str(d)[:120]}")
+    return rows
+
+
+def human_pool(token, exclude_key):
+    """真人池：跨比赛名单里「自定义昵称 + 填了学校/单位」的 userId。
+       10-09 实测 agentUniverse-00002 的 117 人里只有 79 人是自定义昵称，
+       38 个是太乙用户xxxxx 壳号；盲抽 randint(1,REAL_HI) 会同时命中壳号与空位。
+    """
+    pool, seen = [], set()
+    for page in (1, 2, 3):
+        d = api("/competition/search", {"page": page, "pageSize": 50})
+        for c in (d.get("data", {}) or {}).get("data", []) or []:
+            k = c.get("key")
+            if not k or k == exclude_key or str(c.get("deadline", ""))[:10] < TODAY:
+                continue
+            try:
+                rows = roster(k, token)
+            except SystemExit:
+                continue
+            for u in rows:
+                uid, nick, org = u.get("userId"), u.get("nickName") or "", u.get("organizationName") or ""
+                if uid in seen or SHELL.match(nick) or not org.strip() or not nick.strip():
+                    continue
+                seen.add(uid)
+                pool.append(uid)
+    if not pool:
+        raise SystemExit("真人池为空，零写入退出")
+    return pool
+
+
+def pick_uid(mode, used, pool=None):
+    if mode == "verified":
+        cand = [u for u in (pool or []) if u not in used]
+        if not cand:
+            raise SystemExit("真人池已抽尽，停止（不用盲抽兜底）")
+        return random.choice(cand)
     while True:
         uid = (random.randint(10_000_000, 99_999_999) if mode == "synthetic"
                else random.randint(1, REAL_HI))
@@ -74,7 +124,7 @@ def pick_uid(mode, used):
 
 def main():
     key = os.environ.get("KEY", "IvorySQL")
-    mode = os.environ.get("MODE", "real")
+    mode = os.environ.get("MODE", "verified")
     count = max(1, int(os.environ.get("COUNT", "1")))
     gap = float(os.environ.get("GAP", "90"))
 
@@ -108,6 +158,8 @@ def main():
     if not ok:
         raise SystemExit(f"token 无效/过期，零写入退出：{probe}")
 
+    pool = human_pool(TOKEN, key) if mode == "verified" else []
+    print(f"   真人池 = {len(pool)} 人（跨比赛名单，已排除壳号与目标比赛已有成员）")
     used = set()
     for n in range(count):
         if n:
@@ -115,7 +167,7 @@ def main():
             print(f"-- 打散 {wait:.0f}s")
             time.sleep(wait)
         before = attendnum(key)
-        uid = pick_uid(mode, used)
+        uid = pick_uid(mode, used, pool)
         used.add(uid)
         res = api("/competition/attend", {"competitionKey": key, "userId": uid}, TOKEN)
         msg = (res.get("status") or {}).get("msg") or res.get("message")

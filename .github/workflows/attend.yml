@@ -11,10 +11,10 @@ on:
                   Open-supOS, OpenCloudOS-00001, OSS-Compass, Compass-CI-00002,
                   openKylin0002, Agentic_OS_1, CPQCTorchkit_1, open-eBackup_1]
       mode:
-        description: userId 来源
+        description: userId 来源（verified=真人池，读名单需 token）
         type: choice
-        default: real
-        options: [real, synthetic]
+        default: verified
+        options: [verified, real, synthetic]
       count:
         description: 本批人数（逐个写，批间抖动）
         default: "1"
