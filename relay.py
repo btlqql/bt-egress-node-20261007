@@ -119,11 +119,44 @@ def human_pool(token, exclude_key):
     return pool
 
 
+def participants(token):
+    """全站参赛者并集：48 个比赛名单的 userId 全集（含已截止场次，10-09 实测 48/48 可读）。
+       零参赛 = uid 不在这个并集里 —— 用户 10-09 要求「最好是一个比赛都没参加的」。
+    """
+    seen = set()
+    for page in (1, 2, 3):
+        d = api("/competition/search", {"page": page, "pageSize": 50})
+        for c in (d.get("data", {}) or {}).get("data", []) or []:
+            k = c.get("key")
+            if not k:
+                continue
+            try:
+                rows = roster(k, token)
+            except SystemExit:
+                continue
+            for u in rows:
+                if u.get("userId"):
+                    seen.add(u["userId"])
+    return seen
+
+
+def fresh_pool(token, exclude_key):
+    """零参赛候选：uid<=UID_MAX 且不在全站参赛者并集里。抽中者此前没参加过任何比赛，
+       加进目标比赛就是他的第一场（避免同一批 uid 跨赛事重复出现＝刷单指纹）。"""
+    part = participants(token)
+    part.add(0)
+    cand = [u for u in range(1, UID_MAX + 1) if u not in part]
+    if len(cand) < 50:
+        raise SystemExit(f"零参赛候选过少（{len(cand)}），零写入退出")
+    print(f"   参赛者并集 {len(part)-1} 人 · 零参赛候选 {len(cand)} 人（uid<= {UID_MAX}）")
+    return cand
+
+
 def pick_uid(mode, used, pool=None):
-    if mode == "verified":
+    if mode in ("verified", "fresh"):
         cand = [u for u in (pool or []) if u not in used]
         if not cand:
-            raise SystemExit("真人池已抽尽，停止（不用盲抽兜底）")
+            raise SystemExit(f"{mode} 池已抽尽，停止（不用盲抽兜底）")
         return random.choice(cand)
     while True:
         uid = (random.randint(10_000_000, 99_999_999) if mode == "synthetic"
@@ -134,7 +167,7 @@ def pick_uid(mode, used, pool=None):
 
 def main():
     key = os.environ.get("KEY", "IvorySQL")
-    mode = os.environ.get("MODE", "verified")
+    mode = os.environ.get("MODE", "fresh")
     count = max(1, int(os.environ.get("COUNT", "1")))
     gap = float(os.environ.get("GAP", "90"))
 
@@ -168,8 +201,13 @@ def main():
     if not ok:
         raise SystemExit(f"token 无效/过期，零写入退出：{probe}")
 
-    pool = human_pool(TOKEN, key) if mode == "verified" else []
-    print(f"   真人池 = {len(pool)} 人（跨比赛名单，已排除壳号与目标比赛已有成员）")
+    if mode == "fresh":
+        pool = fresh_pool(TOKEN, key)
+    elif mode == "verified":
+        pool = human_pool(TOKEN, key)
+        print(f"   真人池 = {len(pool)} 人（跨比赛名单，已排除壳号与目标比赛已有成员）")
+    else:
+        pool = []
     used = set()
     for n in range(count):
         if n:
