@@ -214,15 +214,27 @@ def main():
             wait = gap * random.uniform(0.7, 1.8)
             print(f"-- 打散 {wait:.0f}s")
             time.sleep(wait)
-        before = attendnum(key)
+        try:
+            before = attendnum(key)
+        except SystemExit:
+            time.sleep(30)
+            before = attendnum(key)
         uid = pick_uid(mode, used, pool)
         used.add(uid)
         res = api("/competition/attend", {"competitionKey": key, "userId": uid}, TOKEN)
         msg = (res.get("status") or {}).get("msg") or res.get("message")
         time.sleep(2)
-        after = attendnum(key)
-        print(f"| {time.strftime('%Y-%m-%d %H:%M:%S')} | {key} | {uid} | "
-              f"{before} → {after} (Δ{(after or 0) - (before or 0):+d}) | {msg} |")
+        try:
+            after = attendnum(key)
+        except SystemExit:
+            after = None                                     # 写已落、读回失败：标未验证，继续
+        if after is None or before is None:
+            status = f"{msg}（读回未验证）"
+            row = f"{before} → {after if after is not None else '?'} (Δ?)"
+        else:
+            status = msg
+            row = f"{before} → {after} (Δ{after - before:+d})"
+        print(f"| {time.strftime('%Y-%m-%d %H:%M:%S')} | {key} | {uid} | {row} | {status} |")
         if msg != "attend success":
             print("   非 success（already have / 限流 / 已修补），停止。")
             break
