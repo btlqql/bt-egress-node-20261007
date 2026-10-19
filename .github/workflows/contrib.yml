@@ -15,7 +15,7 @@ on:
         description: 仓库全名
         default: "agentuniverse-ai/agentUniverse"
       pr_json:
-        description: b64([[merged_at,number,title,head_sha],...])
+        description: 仅填 Base64(JSON数组)，不要粘贴统计文字；每项为[merged_at,number,title,head_sha]
         default: ""
 jobs:
   contrib:
