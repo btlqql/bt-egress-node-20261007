@@ -1,0 +1,28 @@
+name: contrib-add
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 太乙项目对象ID (agentUniverse=5196, supOS=5197)
+        default: "5196"
+      limit:
+        description: 本批登记条数
+        default: "10"
+      pr_json:
+        description: b64([[merged_at,number,title,head_sha],...])
+        default: ""
+jobs:
+  contrib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: contrib
+        env:
+          TAIYI_TOKEN: ${{ secrets.TAIYI_TOKEN }}
+          PROJECT_ID: ${{ inputs.project_id }}
+          LIMIT: ${{ inputs.limit }}
+          PR_JSON: ${{ inputs.pr_json }}
+        run: python3 contrib_add_worker.py
