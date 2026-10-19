@@ -3,11 +3,17 @@ on:
   workflow_dispatch:
     inputs:
       project_id:
-        description: 太乙项目对象ID (agentUniverse=5196, supOS=5197)
+        description: 太乙项目对象ID
         default: "5196"
       limit:
         description: 本批登记条数
         default: "10"
+      find_id:
+        description: 1=找映射 projectId
+        default: ""
+      repo:
+        description: 仓库全名
+        default: "agentuniverse-ai/agentUniverse"
       pr_json:
         description: b64([[merged_at,number,title,head_sha],...])
         default: ""
@@ -24,5 +30,7 @@ jobs:
           TAIYI_TOKEN: ${{ secrets.TAIYI_TOKEN }}
           PROJECT_ID: ${{ inputs.project_id }}
           LIMIT: ${{ inputs.limit }}
+          FIND_ID: ${{ inputs.find_id }}
+          REPO: ${{ inputs.repo }}
           PR_JSON: ${{ inputs.pr_json }}
         run: python3 contrib_add_worker.py
