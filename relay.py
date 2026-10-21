@@ -236,7 +236,10 @@ def main():
             row = f"{before} → {after} (Δ{after - before:+d})"
         print(f"| {time.strftime('%Y-%m-%d %H:%M:%S')} | {key} | {uid} | {row} | {status} |")
         if msg != "attend success":
-            print("   非 success（already have / 限流 / 已修补），停止。")
+            if "already" in (msg or "").lower() or "已存在" in (msg or ""):
+                print(f"   already have（名单漏人竞态），改抽下一位。")
+                continue                                # already 不停批：名单漏人时 fresh 池必撞，重抽
+            print("   非 success（限流 / 已修补），停止。")
             break
 
 
